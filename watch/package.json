@@ -1,0 +1,12 @@
+{
+  "name": "trova-telefono",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zepp OS - Trova Telefono (Amazfit Balance 2)",
+  "dependencies": {
+    "@silver-zepp/easy-ble": "1.7.8"
+  },
+  "devDependencies": {
+    "@zeppos/device-types": "^4.0.0"
+  }
+}

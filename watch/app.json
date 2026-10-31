@@ -1,0 +1,40 @@
+{
+  "configVersion": "v3",
+  "app": {
+    "appId": 1094572,
+    "appName": "Trova Telefono",
+    "appType": "app",
+    "version": { "code": 1, "name": "1.0.0" },
+    "icon": "icon.png",
+    "vender": "pietro",
+    "description": "Fa suonare il telefono dallo speaker anche con auricolari BT collegati, con indicatore di prossimità"
+  },
+  "permissions": ["device:os.compass", "device:os.ble"],
+  "runtime": {
+    "apiVersion": { "compatible": "3.0.0", "target": "3.6.0", "minVersion": "3.0.0" }
+  },
+  "debug": false,
+  "targets": {
+    "balance2": {
+      "module": {
+        "page": { "pages": ["page/index"] },
+        "app-widget": {
+          "widgets": [
+            {
+              "path": "app-widget/index",
+              "icon": "icon.png",
+              "name": "Trova Telefono",
+              "runtime": { "type": "js" }
+            }
+          ]
+        }
+      },
+      "platforms": [{ "st": "r", "dw": 480 }]
+    }
+  },
+  "i18n": {
+    "it-IT": { "appName": "Trova Telefono" },
+    "en-US": { "appName": "Find Phone" }
+  },
+  "defaultLanguage": "it-IT"
+}
