@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -90,3 +90,25 @@ jobs:
           tail -60 build.log | sed 's/\x1b\[[0-9;]*m//g' > err.txt
           msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g' err.txt)
           echo "::error title=zeus::${msg}"
+
+  publish:
+    needs: [build, watch]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Pubblica output sul branch build-output
+        run: |
+          set -e
+          ls -la out || true
+          [ -n "$(ls -A out 2>/dev/null)" ] || { echo "nessun output"; exit 0; }
+          cd out
+          git init -q -b build-output
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build ${{ github.run_number }} (${{ github.sha }})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" build-output
