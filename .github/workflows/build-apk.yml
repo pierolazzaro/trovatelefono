@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -93,6 +93,8 @@ jobs:
 
   publish:
     needs: [build, watch]
+    permissions:
+      contents: write
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
