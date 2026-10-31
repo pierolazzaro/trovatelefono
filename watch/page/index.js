@@ -2,7 +2,7 @@ import { createWidget, widget, prop, align, text_style } from '@zos/ui'
 import { mstStartScan, mstStopScan } from '@zos/ble'
 import { Compass } from '@zos/sensor'
 import { setPageBrightTime, resetPageBrightTime } from '@zos/display'
-import BLEMaster from '@silver-zepp/easy-ble'
+import { BLEMaster } from '@silver-zepp/easy-ble'
 import { CFG } from '../utils/config'
 import { getPairKey, feedEntropy } from '../utils/pairing'
 
