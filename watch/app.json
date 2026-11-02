@@ -5,8 +5,8 @@
     "appName": "Trova Telefono",
     "appType": "app",
     "version": {
-      "code": 11,
-      "name": "1.2.1"
+      "code": 12,
+      "name": "1.2.2"
     },
     "icon": "icon.png",
     "vender": "pietro",
@@ -63,10 +63,19 @@
       },
       "platforms": [
         {
-          "st": "r",
-          "dw": 480
+          "name": "balance2",
+          "deviceSource": 9568512
+        },
+        {
+          "name": "balance2-b",
+          "deviceSource": 9568513
+        },
+        {
+          "name": "balance2-c",
+          "deviceSource": 9568515
         }
-      ]
+      ],
+      "designWidth": 480
     }
   },
   "i18n": {
