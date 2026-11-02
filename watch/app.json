@@ -52,7 +52,8 @@
               "name": "Trova Telefono",
               "runtime": {
                 "type": "js"
-              }
+              },
+              "preview": "preview.png"
             }
           ]
         }
