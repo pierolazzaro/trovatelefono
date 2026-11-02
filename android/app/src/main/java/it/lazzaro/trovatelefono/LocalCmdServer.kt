@@ -40,7 +40,8 @@ class LocalCmdServer(
 
     private fun loop() {
         try {
-            server = ServerSocket(port, 4, InetAddress.getLoopbackAddress())
+            // IPv4 esplicito: getLoopbackAddress() su Android può restituire ::1
+            server = ServerSocket(port, 4, InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
             Log.i(tag, "in ascolto su 127.0.0.1:$port")
             while (!Thread.currentThread().isInterrupted) {
                 val s = server?.accept() ?: break
