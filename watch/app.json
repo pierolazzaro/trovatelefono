@@ -5,8 +5,8 @@
     "appName": "Trova Telefono",
     "appType": "app",
     "version": {
-      "code": 8,
-      "name": "1.1.2"
+      "code": 9,
+      "name": "1.1.3"
     },
     "icon": "icon.png",
     "vender": "pietro",
@@ -15,6 +15,7 @@
   "permissions": [
     "device:os.compass",
     "device:os.ble",
+    "device:os.local_storage",
     "data:os.device.info"
   ],
   "runtime": {
