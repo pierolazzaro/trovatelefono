@@ -119,7 +119,16 @@ function onScan(r) {
   if (!sampleUuid && r.service_uuid_array && r.service_uuid_array.length) {
     sampleUuid = String(r.service_uuid_array[0]).slice(0, 12)
   }
-  if (!matchesPhone(r)) return
+  const f = SCAN_MODES[modeIdx].filter
+  let ok = matchesPhone(r)
+  if (!ok && f) {
+    // con filtro hardware attivo accetto il risultato, salvo che dichiari
+    // esplicitamente altri service UUID (filtro ignorato dal firmware)
+    const arr = r.service_uuid_array
+    ok = !(arr && arr.length)
+  }
+  if (!ok) return
+  modeLocked = true
   const now = Date.now()
   phoneMac = ab2mac(r.dev_addr)
   lastSeen = now
@@ -138,10 +147,49 @@ function onScan(r) {
   }
 }
 
+// Modalità di scansione: Zepp OS senza filtro restituisce pochissimi dispositivi,
+// quindi prima provo i filtri hardware (manufacturer id del marcatore, service UUID).
+const SCAN_MODES = [
+  { name: 'mfg', filter: { manufacturer_id: 0xffff } },
+  { name: 'uuid', filter: { service_uuid: CFG.SERVICE_UUID } },
+  { name: 'all', filter: null },
+]
+let modeIdx = 0
+let modeLocked = false
+let modeStart = 0
+let cycleTimer = null
+
 function startScan() {
   if (scanning || busy) return
-  scanning = mstStartScan(onScan)
-  if (!scanning) status('Scansione BLE non avviata')
+  const f = SCAN_MODES[modeIdx].filter
+  try {
+    scanning = f ? mstStartScan(onScan, f) : mstStartScan(onScan)
+  } catch (e) {
+    scanning = false
+  }
+  modeStart = Date.now()
+  if (!scanning) status('Scan ' + SCAN_MODES[modeIdx].name + ' non avviata')
+}
+
+function scanCycle() {
+  if (busy) return
+  const now = Date.now()
+  const seenRecently = lastSeen && now - lastSeen < CFG.LOST_AFTER_MS
+  if (!modeLocked) {
+    if (now - modeStart >= 8000 && !seenRecently) {
+      stopScan()
+      modeIdx = (modeIdx + 1) % SCAN_MODES.length
+      startScan()
+    } else if (!scanning) {
+      startScan()
+    }
+    return
+  }
+  // modalità trovata: riavvio periodico per avere RSSI aggiornati
+  if (!scanning || now - modeStart >= 15000) {
+    stopScan()
+    startScan()
+  }
 }
 
 function stopScan() {
@@ -284,7 +332,7 @@ function refresh() {
   if (lost || ema === null) {
     setText(ui.big, '--')
     // diagnostica: scan attiva? quanti dispositivi? esempio di UUID visto
-    setText(ui.small, (scanning ? 'scan ' : 'NO scan ') + scanDevN + ' dev' + (sampleUuid ? ' ' + sampleUuid : ''))
+    setText(ui.small, SCAN_MODES[modeIdx].name + (scanning ? '' : '!') + ' ' + scanDevN + 'dev ' + scanCount + 'pk' + (sampleUuid ? ' ' + sampleUuid : ''))
     setText(ui.trend, lastSeen ? 'Segnale perso' : 'Cerco il telefono…')
     ui.arc.setProperty(prop.MORE, { end_angle: -90, color: 0x444444 })
   } else {
@@ -371,10 +419,12 @@ Page({
 
     startScan()
     refreshTimer = setInterval(refresh, 300)
+    cycleTimer = setInterval(scanCycle, 1000)
   },
 
   onDestroy() {
     if (refreshTimer) clearInterval(refreshTimer)
+    if (cycleTimer) clearInterval(cycleTimer)
     stopScan()
     if (compass) {
       try { compass.offChange(onCompass); compass.stop() } catch (e) {}
@@ -384,5 +434,6 @@ Page({
     ui = {}
     phoneMac = null; lastSeen = 0; ema = null; history = []
     busy = false; ringSent = false; dirMode = 'off'
+    modeIdx = 0; modeLocked = false; scanCount = 0; scanDevs = {}; scanDevN = 0; sampleUuid = ''
   },
 })
