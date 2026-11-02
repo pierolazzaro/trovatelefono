@@ -74,7 +74,20 @@ class Ringer(private val ctx: Context) {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
             )
-            mp.setDataSource(ctx, pickTone())
+            try {
+                mp.setDataSource(ctx, SoundPrefs.effective(ctx))
+            } catch (e: Exception) {
+                // file rimosso o permesso revocato: torna al suono predefinito
+                Log.w(tag, "suono scelto non riproducibile, uso predefinito: ${e.message}")
+                mp.reset()
+                mp.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                mp.setDataSource(ctx, SoundPrefs.defaultUri())
+            }
             mp.isLooping = true
             mp.prepare()
             if (speaker != null) {
@@ -125,11 +138,6 @@ class Ringer(private val ctx: Context) {
             savedAlarmVolume = -1
         }
     }
-
-    private fun pickTone(): Uri =
-        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
     private fun findTorch(): String? = try {
         cam.cameraIdList.firstOrNull { id ->

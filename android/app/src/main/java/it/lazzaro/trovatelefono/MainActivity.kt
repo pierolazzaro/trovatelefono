@@ -3,6 +3,8 @@ package it.lazzaro.trovatelefono
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
+import android.media.RingtoneManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -18,6 +20,12 @@ import androidx.core.content.ContextCompat
 class MainActivity : Activity() {
 
     private lateinit var status: TextView
+    private lateinit var soundBtn: Button
+
+    companion object {
+        private const val REQ_RINGTONE = 10
+        private const val REQ_FILE = 11
+    }
 
     private val perms = arrayOf(
         Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -49,6 +57,8 @@ class MainActivity : Activity() {
             send(FinderService.ACTION_PAIR)
             status.text = "Accoppiamento aperto per 60 s:\npremi FAI SUONARE sull'orologio."
         }
+        soundBtn = Button(this).apply { setOnClickListener { chooseSound() } }
+        root.addView(soundBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         btn("Test suoneria (8 s, speaker)") { send(FinderService.ACTION_TEST_RING) }
         btn("Stop suoneria") { send(FinderService.ACTION_STOP_RING) }
         btn("Dimentica orologio") { send(FinderService.ACTION_UNPAIR); status.postDelayed({ refresh() }, 300) }
@@ -106,7 +116,66 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun chooseSound() {
+        AlertDialog.Builder(this)
+            .setTitle("Suono da far partire")
+            .setItems(arrayOf("Suonerie di sistema", "File audio dal telefono", "Ripristina predefinito")) { _, which ->
+                when (which) {
+                    0 -> pickSystemTone()
+                    1 -> pickAudioFile()
+                    2 -> { SoundPrefs.set(this, null); refresh() }
+                }
+            }
+            .show()
+    }
+
+    private fun pickSystemTone() {
+        val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALL)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Suono Trova Telefono")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, SoundPrefs.defaultUri())
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, SoundPrefs.effective(this@MainActivity))
+        }
+        startActivityForResult(i, REQ_RINGTONE)
+    }
+
+    private fun pickAudioFile() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "audio/*"
+        }
+        startActivityForResult(i, REQ_FILE)
+    }
+
+    @Deprecated("Activity API classica, sufficiente qui")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK || data == null) return
+        when (requestCode) {
+            REQ_RINGTONE -> {
+                @Suppress("DEPRECATION")
+                val uri = data.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                SoundPrefs.set(this, uri)
+            }
+            REQ_FILE -> {
+                val uri = data.data ?: return
+                // permesso di lettura persistente: il servizio lo riproduce anche dopo un riavvio
+                try {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: SecurityException) {}
+                SoundPrefs.get(this)?.takeIf { it != uri && it.scheme == "content" && it.authority != "media" }?.let { old ->
+                    try { contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                }
+                SoundPrefs.set(this, uri)
+            }
+        }
+        refresh()
+    }
+
     private fun refresh() {
+        soundBtn.text = "Suono: " + SoundPrefs.label(this)
         val pm = getSystemService(PowerManager::class.java)
         status.text = buildString {
             appendLine("Permessi: " + if (allGranted()) "OK" else "MANCANTI")
