@@ -55,7 +55,8 @@ class MainActivity : Activity() {
         btn("3. Avvia servizio") { startFinder() }
         btn("4. Accoppia orologio (60 s)") {
             send(FinderService.ACTION_PAIR)
-            status.text = "Accoppiamento aperto per 60 s:\npremi FAI SUONARE sull'orologio."
+            status.text = "ACCOPPIAMENTO APERTO (60 s)\nOra apri l'app sull'orologio e premi FAI SUONARE."
+            android.widget.Toast.makeText(this, "Accoppiamento aperto per 60 secondi", android.widget.Toast.LENGTH_LONG).show()
         }
         soundBtn = Button(this).apply { setOnClickListener { chooseSound() } }
         root.addView(soundBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -68,7 +69,10 @@ class MainActivity : Activity() {
     }
 
     private val pairedReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: android.content.Context?, i: Intent?) { refresh() }
+        override fun onReceive(c: android.content.Context?, i: Intent?) {
+            refresh()
+            android.widget.Toast.makeText(this@MainActivity, "Orologio accoppiato ✔", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onResume() {

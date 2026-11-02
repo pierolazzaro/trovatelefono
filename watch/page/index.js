@@ -35,14 +35,60 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[^0-9a-f]/g, '')
 const SVC = norm(CFG.SERVICE_UUID)
 const SVC_REV = SVC.match(/../g).reverse().join('')
 
-function matchesService(arr) {
-  if (!arr || !arr.length) return false
-  for (let i = 0; i < arr.length; i++) {
-    const u = norm(arr[i])
-    if (u === SVC || u === SVC_REV) return true
+// Marcatore nei manufacturer data (FinderService.kt: MFG_ID 0xFFFF + "TROVAT")
+const MARK = [0x54, 0x52, 0x4f, 0x56, 0x41, 0x54] // "TROVAT"
+const SVC_HEAD = SVC.slice(0, 8)
+const SVC_TAIL_REV = SVC_REV.slice(-8)
+
+function hexOf(v) {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'number') return v.toString(16)
+  if (typeof v === 'string') return norm(v)
+  try {
+    const b = new Uint8Array(v)
+    let h = ''
+    for (let i = 0; i < b.length; i++) h += (b[i] < 16 ? '0' : '') + b[i].toString(16)
+    return h
+  } catch (e) {
+    return ''
+  }
+}
+
+function hasBytes(v, pat) {
+  if (!v || typeof v === 'string' || typeof v === 'number') return false
+  let b
+  try { b = new Uint8Array(v) } catch (e) { return false }
+  for (let i = 0; i + pat.length <= b.length; i++) {
+    let ok = true
+    for (let k = 0; k < pat.length; k++) if (b[i + k] !== pat[k]) { ok = false; break }
+    if (ok) return true
   }
   return false
 }
+
+function uuidMatch(u) {
+  const h = hexOf(u)
+  if (!h) return false
+  return h === SVC || h === SVC_REV || h.indexOf(SVC_HEAD) >= 0 || h.indexOf(SVC_TAIL_REV) >= 0
+}
+
+// Accetta qualsiasi formato in cui Zepp OS esponga l'UUID a 128 bit o il marcatore
+function matchesPhone(r) {
+  const arr = r.service_uuid_array
+  if (arr && arr.length) for (let i = 0; i < arr.length; i++) if (uuidMatch(arr[i])) return true
+  if (r.uuid !== undefined && uuidMatch(r.uuid)) return true
+  const sd = r.service_data_array
+  if (sd && sd.length) for (let i = 0; i < sd.length; i++) if (sd[i] && uuidMatch(sd[i].uuid)) return true
+  if (hasBytes(r.vendor_data, MARK) || hasBytes(r.manufacturer_data, MARK) || hasBytes(r.adv_data, MARK)) return true
+  if (typeof r.vendor_data === 'string' && r.vendor_data.indexOf('TROVAT') >= 0) return true
+  return false
+}
+
+// Diagnostica: quanti dispositivi BLE vede la scansione e un esempio di UUID
+let scanCount = 0
+let scanDevs = {}
+let scanDevN = 0
+let sampleUuid = ''
 
 function ab2mac(buf) {
   const b = new Uint8Array(buf)
@@ -66,7 +112,14 @@ function status(t) {
 
 // ---------- BLE scan (RSSI) ----------
 function onScan(r) {
-  if (!r || !matchesService(r.service_uuid_array)) return
+  if (!r) return
+  scanCount++
+  const mac = r.dev_addr ? ab2mac(r.dev_addr) : '?'
+  if (!scanDevs[mac]) { scanDevs[mac] = 1; scanDevN++ }
+  if (!sampleUuid && r.service_uuid_array && r.service_uuid_array.length) {
+    sampleUuid = String(r.service_uuid_array[0]).slice(0, 12)
+  }
+  if (!matchesPhone(r)) return
   const now = Date.now()
   phoneMac = ab2mac(r.dev_addr)
   lastSeen = now
@@ -230,7 +283,8 @@ function refresh() {
 
   if (lost || ema === null) {
     setText(ui.big, '--')
-    setText(ui.small, '')
+    // diagnostica: scan attiva? quanti dispositivi? esempio di UUID visto
+    setText(ui.small, (scanning ? 'scan ' : 'NO scan ') + scanDevN + ' dev' + (sampleUuid ? ' ' + sampleUuid : ''))
     setText(ui.trend, lastSeen ? 'Segnale perso' : 'Cerco il telefono…')
     ui.arc.setProperty(prop.MORE, { end_angle: -90, color: 0x444444 })
   } else {
@@ -284,7 +338,7 @@ Page({
       align_h: align.CENTER_H, align_v: align.CENTER_V, text: '--',
     })
     ui.small = createWidget(widget.TEXT, {
-      x: 140, y: 196, w: 200, h: 30, color: 0x888888, text_size: 22,
+      x: 90, y: 196, w: 300, h: 30, color: 0x888888, text_size: 20,
       align_h: align.CENTER_H, align_v: align.CENTER_V, text: '',
     })
     ui.trend = createWidget(widget.TEXT, {

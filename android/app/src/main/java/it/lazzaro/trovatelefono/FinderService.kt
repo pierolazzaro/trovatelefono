@@ -58,6 +58,8 @@ class FinderService : Service() {
         private const val NOTIF_ID = 1
         private const val MIN_CMD_INTERVAL_MS = 1500L
         private const val TAG = "FinderService"
+        private const val MFG_ID = 0xFFFF // ID "test/riservato" Bluetooth SIG
+        private val MFG_MARK = "TROVAT".toByteArray(Charsets.US_ASCII)
         private val KEY_RE = Regex("^[0-9a-f]{16}$")
 
         fun isPaired(ctx: Context): Boolean =
@@ -156,6 +158,8 @@ class FinderService : Service() {
             .setIncludeDeviceName(false)
             .setIncludeTxPowerLevel(false)
             .addServiceUuid(ParcelUuid(SERVICE_UUID))
+            // flags(3) + UUID128(18) + manufacturer(4+6) = 31 byte: advertising legacy pieno
+            .addManufacturerData(MFG_ID, MFG_MARK)
             .build()
         try {
             adv.startAdvertising(settings, data, advCallback)
