@@ -3,6 +3,7 @@ import { mstStartScan, mstStopScan } from '@zos/ble'
 import { Compass } from '@zos/sensor'
 import { setPageBrightTime, resetPageBrightTime } from '@zos/display'
 import { BLEMaster } from '@silver-zepp/easy-ble'
+import { BasePage } from '@zeppos/zml/base-page'
 import { CFG } from '../utils/config'
 import { getPairKey, feedEntropy } from '../utils/pairing'
 
@@ -141,10 +142,6 @@ function onScan(r) {
     bins[b].n++
   }
 
-  if (autoRing && !ringSent && !busy) {
-    ringSent = true
-    sendCmd('R')
-  }
 }
 
 // Modalità di scansione: Zepp OS senza filtro restituisce pochissimi dispositivi,
@@ -198,8 +195,50 @@ function stopScan() {
   scanning = false
 }
 
-// ---------- comandi al telefono (GATT write) ----------
+// ---------- comandi al telefono ----------
+// Percorso principale: orologio -> Zepp app (side service) -> app Android su 127.0.0.1.
+// Fallback: scrittura GATT diretta se la scansione BLE ha trovato il telefono.
+let pageRef = null
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
+}
+
 function sendCmd(cmd) {
+  if (busy) return
+  if (!pageRef || typeof pageRef.request !== 'function') {
+    sendCmdBle(cmd)
+    return
+  }
+  busy = true
+  status(cmd === 'R' ? 'Invio via Zepp…' : 'Arresto…')
+  withTimeout(pageRef.request({ method: 'tt.cmd', params: { c: cmd, k: getPairKey() } }), 9000)
+    .then((r) => {
+      busy = false
+      const st = r && r.status
+      if (st === 200) {
+        status(cmd === 'R' ? 'Il telefono suona!' : 'Fermato')
+      } else if (st === 403) {
+        status('Premi "Accoppia" sul tel.')
+        if (cmd === 'R') ringSent = false
+      } else {
+        // app Android non raggiungibile dalla Zepp app: provo via BLE diretto
+        status('App tel. non risponde (' + st + ')')
+        sendCmdBle(cmd)
+      }
+    })
+    .catch(() => {
+      busy = false
+      status('Zepp app non risponde')
+      sendCmdBle(cmd)
+    })
+}
+
+// ---------- fallback: GATT write diretto ----------
+function sendCmdBle(cmd) {
   if (busy) return
   if (!phoneMac || Date.now() - lastSeen > CFG.LOST_AFTER_MS) {
     status('Telefono non in vista')
@@ -357,13 +396,15 @@ function refresh() {
 }
 
 // ---------- pagina ----------
-Page({
+Page(BasePage({
   onInit(params) {
+    pageRef = this
     const p = typeof params === 'string' ? params : ''
     autoRing = p.indexOf('ring') >= 0
   },
 
   build() {
+    pageRef = this
     try { setPageBrightTime({ brightTime: 120000 }) } catch (e) {}
 
     createWidget(widget.ARC, {
@@ -419,6 +460,10 @@ Page({
 
     startScan()
     refreshTimer = setInterval(refresh, 300)
+    if (autoRing && !ringSent) {
+      ringSent = true
+      setTimeout(() => sendCmd('R'), 300)
+    }
     cycleTimer = setInterval(scanCycle, 1000)
   },
 
@@ -435,5 +480,6 @@ Page({
     phoneMac = null; lastSeen = 0; ema = null; history = []
     busy = false; ringSent = false; dirMode = 'off'
     modeIdx = 0; modeLocked = false; scanCount = 0; scanDevs = {}; scanDevN = 0; sampleUuid = ''
+    pageRef = null
   },
-})
+}))

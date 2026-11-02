@@ -58,6 +58,7 @@ class FinderService : Service() {
         private const val NOTIF_ID = 1
         private const val MIN_CMD_INTERVAL_MS = 1500L
         private const val TAG = "FinderService"
+        const val LOCAL_PORT = 47811
         private const val MFG_ID = 0xFFFF // ID "test/riservato" Bluetooth SIG
         private val MFG_MARK = "TROVAT".toByteArray(Charsets.US_ASCII)
         private val KEY_RE = Regex("^[0-9a-f]{16}$")
@@ -93,6 +94,7 @@ class FinderService : Service() {
             this, btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        localServer.start()
         startBle()
     }
 
@@ -107,6 +109,7 @@ class FinderService : Service() {
     }
 
     override fun onDestroy() {
+        localServer.stop()
         ringer.stop()
         stopBle()
         try { unregisterReceiver(btStateReceiver) } catch (_: Exception) {}
@@ -252,6 +255,13 @@ class FinderService : Service() {
             )
             if (cmd != null) execute(cmd)
         }
+    }
+
+    /** Canale via Zepp app (side service -> http://127.0.0.1:LOCAL_PORT). Stessa validazione del BLE. */
+    private val localServer = LocalCmdServer(LOCAL_PORT) { op, key ->
+        val cmd = parseCommand(CMD_UUID, 0, "$op:$key".toByteArray(Charsets.US_ASCII))
+        if (cmd != null) execute(cmd)
+        cmd != null
     }
 
     private val longWrites = java.util.concurrent.ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
