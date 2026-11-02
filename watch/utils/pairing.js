@@ -22,8 +22,8 @@ function randomHex(len) {
 export function getPairKey() {
   const ls = new LocalStorage()
   let k = ls.getItem(STORAGE_KEY)
-  if (typeof k !== 'string' || !/^[0-9a-f]{32}$/.test(k)) {
-    k = randomHex(32)
+  if (typeof k !== 'string' || !/^[0-9a-f]{16}$/.test(k)) {
+    k = randomHex(16)
     ls.setItem(STORAGE_KEY, k)
   }
   return k

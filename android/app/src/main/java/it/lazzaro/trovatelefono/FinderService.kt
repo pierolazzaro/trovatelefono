@@ -58,7 +58,7 @@ class FinderService : Service() {
         private const val NOTIF_ID = 1
         private const val MIN_CMD_INTERVAL_MS = 1500L
         private const val TAG = "FinderService"
-        private val KEY_RE = Regex("^[0-9a-f]{32}$")
+        private val KEY_RE = Regex("^[0-9a-f]{16}$")
 
         fun isPaired(ctx: Context): Boolean =
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(PREF_KEY, null) != null
@@ -210,6 +210,21 @@ class FinderService : Service() {
             device: BluetoothDevice, requestId: Int, characteristic: BluetoothGattCharacteristic,
             preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?
         ) {
+            Log.i(TAG, "write: prepared=$preparedWrite offset=$offset len=${value?.size}")
+            if (preparedWrite) {
+                // Long write: accumulo i frammenti e li valuto in onExecuteWrite
+                val buf = longWrites.getOrPut(device.address) { java.io.ByteArrayOutputStream() }
+                val ok = characteristic.uuid == CMD_UUID && value != null && offset == buf.size() && buf.size() + value.size <= 64
+                if (ok) buf.write(value!!) else longWrites.remove(device.address)
+                if (responseNeeded) {
+                    gattServer?.sendResponse(
+                        device, requestId,
+                        if (ok) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_INVALID_OFFSET,
+                        offset, value
+                    )
+                }
+                return
+            }
             val cmd = parseCommand(characteristic.uuid, offset, value)
             if (responseNeeded) {
                 gattServer?.sendResponse(
@@ -218,30 +233,49 @@ class FinderService : Service() {
                     0, null
                 )
             }
-            if (cmd == null) return
+            if (cmd != null) execute(cmd)
+        }
 
-            val now = SystemClock.elapsedRealtime()
-            if (cmd == 'R' && now - lastCmdAt < MIN_CMD_INTERVAL_MS) return
-            lastCmdAt = now
+        @SuppressLint("MissingPermission")
+        override fun onExecuteWrite(device: BluetoothDevice, requestId: Int, execute: Boolean) {
+            val data = longWrites.remove(device.address)?.toByteArray()
+            val cmd = if (execute && data != null) parseCommand(CMD_UUID, 0, data) else null
+            Log.i(TAG, "executeWrite execute=$execute len=${data?.size} ok=${cmd != null}")
+            gattServer?.sendResponse(
+                device, requestId,
+                if (!execute || cmd != null) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_WRITE_NOT_PERMITTED,
+                0, null
+            )
+            if (cmd != null) execute(cmd)
+        }
+    }
 
-            handler.post {
-                when (cmd) {
-                    'R' -> ringer.start()
-                    'S' -> ringer.stop()
-                }
+    private val longWrites = java.util.concurrent.ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
+
+    private fun execute(cmd: Char) {
+        val now = SystemClock.elapsedRealtime()
+        if (cmd == 'R' && now - lastCmdAt < MIN_CMD_INTERVAL_MS) return
+        lastCmdAt = now
+        handler.post {
+            when (cmd) {
+                'R' -> ringer.start()
+                'S' -> ringer.stop()
             }
         }
     }
 
     /**
-     * Formato atteso: "R:<key>" oppure "S:<key>", key = 32 caratteri hex generati dall'orologio.
+     * Formato atteso: "R:<key>" oppure "S:<key>", key = 16 caratteri hex (18 byte: entra in un singolo ATT write con MTU 23) generati dall'orologio.
      * Se nessuna chiave è salvata, o se la finestra di accoppiamento è aperta,
      * la chiave ricevuta viene memorizzata (trust on first use controllato dall'utente).
      */
     private fun parseCommand(uuid: UUID, offset: Int, value: ByteArray?): Char? {
-        if (uuid != CMD_UUID || offset != 0 || value == null || value.size !in 3..64) return null
+        if (uuid != CMD_UUID || offset != 0 || value == null || value.size !in 3..64) {
+            Log.w(TAG, "write scartato: uuid=$uuid offset=$offset len=${value?.size}")
+            return null
+        }
         val s = try { String(value, Charsets.UTF_8).trim() } catch (_: Exception) { return null }
-        if (s.length != 34 || s[1] != ':') return null
+        if (s.length != 18 || s[1] != ':') { Log.w(TAG, "formato comando non valido (len=${s.length})"); return null }
         val op = s[0]
         if (op != 'R' && op != 'S') return null
         val key = s.substring(2)
