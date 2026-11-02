@@ -5,8 +5,8 @@
     "appName": "Trova Telefono",
     "appType": "app",
     "version": {
-      "code": 12,
-      "name": "1.2.2"
+      "code": 13,
+      "name": "1.3.0"
     },
     "icon": "icon.png",
     "vender": "pietro",
@@ -18,8 +18,8 @@
   ],
   "runtime": {
     "apiVersion": {
-      "compatible": "3.6.0",
-      "target": "3.6.0",
+      "compatible": "3.6",
+      "target": "4.2",
       "minVersion": "3.6"
     }
   },
@@ -32,28 +32,16 @@
             "page/index"
           ]
         },
-        "app-widget": {
-          "widgets": [
-            {
-              "path": "app-widget/index",
-              "icon": "icon.png",
-              "name": "Trova Telefono",
-              "runtime": {
-                "type": "js"
-              }
-            }
-          ]
-        },
         "secondary-widget": {
           "widgets": [
             {
               "path": "secondary-widget/index",
               "icon": "icon.png",
+              "preview": "preview.png",
               "name": "Trova Telefono",
               "runtime": {
                 "type": "js"
-              },
-              "preview": "preview.png"
+              }
             }
           ]
         },
@@ -63,19 +51,10 @@
       },
       "platforms": [
         {
-          "name": "balance2",
-          "deviceSource": 9568512
-        },
-        {
-          "name": "balance2-b",
-          "deviceSource": 9568513
-        },
-        {
-          "name": "balance2-c",
-          "deviceSource": 9568515
+          "st": "r",
+          "dw": 480
         }
-      ],
-      "designWidth": 480
+      ]
     }
   },
   "i18n": {

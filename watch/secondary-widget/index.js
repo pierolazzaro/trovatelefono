@@ -1,49 +1,79 @@
-import { createWidget, widget, align, text_style } from '@zos/ui'
-import { launchApp } from '@zos/router'
+// Widget (lista Widget: scorri a sinistra dal quadrante): FAI SUONARE e STOP senza aprire l'app.
+// Struttura allineata al widget "Bollature" che funziona sullo stesso Balance 2:
+// SecondaryWidget(BasePage(...)), API target 4.2, nessuna shortcut card nello stesso pacchetto.
+import { createWidget, widget, align, prop, text_style } from '@zos/ui'
+import { px } from '@zos/utils'
+import { BasePage } from '@zeppos/zml/base-page'
+import { getPairKey } from '../utils/pairing'
 
-// Widget a schermo intero (lista Widget: scorri a sinistra dal quadrante).
-// Nessuna dipendenza da altri moduli dell'app; in caso di errore lo mostra a schermo.
-const APP_ID = 1094572
-
-function open(params) {
-  try {
-    launchApp({ appId: APP_ID, url: 'page/index', params })
-  } catch (e) {
-    // niente: il click non deve mai far crashare il widget
-  }
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
 }
 
-SecondaryWidget({
-  onInit() {},
-  build() {
-    // sfondo pieno: il widget resta visibile anche se qualcosa sotto fallisce
-    createWidget(widget.FILL_RECT, { x: 0, y: 0, w: 480, h: 480, color: 0x101014 })
-    try {
+SecondaryWidget(
+  BasePage({
+    state: { busy: false },
+
+    build() {
       createWidget(widget.TEXT, {
-        x: 60, y: 70, w: 360, h: 50, color: 0xffffff, text_size: 34,
-        align_h: align.CENTER_H, align_v: align.CENTER_V, text: 'Trova telefono',
+        x: px(40), y: px(70), w: px(400), h: px(50), color: 0xffffff, text_size: px(34),
+        align_h: align.CENTER_H, align_v: align.CENTER_V, text_style: text_style.NONE,
+        text: 'Trova telefono',
+      })
+      this.statusText = createWidget(widget.TEXT, {
+        x: px(40), y: px(122), w: px(400), h: px(40), color: 0xffd60a, text_size: px(24),
+        align_h: align.CENTER_H, align_v: align.CENTER_V, text_style: text_style.NONE,
+        text: '',
       })
       createWidget(widget.BUTTON, {
-        x: 80, y: 150, w: 320, h: 110, radius: 55,
+        x: px(80), y: px(176), w: px(320), h: px(110), radius: px(55),
         normal_color: 0xff3b30, press_color: 0x992218,
-        text: 'FAI SUONARE', text_size: 38, color: 0xffffff,
-        click_func: () => open('ring'),
+        text: 'FAI SUONARE', text_size: px(38), color: 0xffffff,
+        click_func: () => this.send('R'),
       })
       createWidget(widget.BUTTON, {
-        x: 120, y: 290, w: 240, h: 80, radius: 40,
-        normal_color: 0x0a84ff, press_color: 0x05437f,
-        text: 'Apri', text_size: 30, color: 0xffffff,
-        click_func: () => open('open'),
+        x: px(130), y: px(304), w: px(220), h: px(80), radius: px(40),
+        normal_color: 0x3a3a3c, press_color: 0x1c1c1e,
+        text: 'STOP', text_size: px(30), color: 0xffffff,
+        click_func: () => this.send('S'),
       })
-    } catch (e) {
-      createWidget(widget.TEXT, {
-        x: 40, y: 380, w: 400, h: 80, color: 0xff453a, text_size: 20,
-        align_h: align.CENTER_H, align_v: align.CENTER_V, text_style: text_style.WRAP,
-        text: 'ERR ' + String(e && e.message ? e.message : e).slice(0, 60),
-      })
-    }
-  },
-  onResume() {},
-  onPause() {},
-  onDestroy() {},
-})
+    },
+
+    setStatus(t) {
+      if (this.statusText) this.statusText.setProperty(prop.TEXT, t)
+    },
+
+    send(cmd) {
+      if (this.state.busy) return
+      this.state.busy = true
+      this.setStatus(cmd === 'R' ? 'Invio…' : 'Arresto…')
+      let req
+      try {
+        req = this.request({ method: 'tt.cmd', params: { c: cmd, k: getPairKey() } })
+      } catch (e) {
+        this.state.busy = false
+        this.setStatus('Errore: ' + String(e && e.message ? e.message : e).slice(0, 20))
+        return
+      }
+      withTimeout(req, 9000)
+        .then((r) => {
+          this.state.busy = false
+          const st = r && r.status
+          if (st === 200) this.setStatus(cmd === 'R' ? 'Il telefono suona!' : 'Fermato')
+          else if (st === 403) this.setStatus('Premi Accoppia sul telefono')
+          else this.setStatus('Errore telefono ' + st)
+        })
+        .catch(() => {
+          this.state.busy = false
+          this.setStatus('Zepp app non raggiungibile')
+        })
+    },
+
+    onResume() {
+      this.setStatus('')
+    },
+  }),
+)
