@@ -25,12 +25,15 @@ AppSideService(
       const c = String(p.c || '')
       const k = String(p.k || '')
       if (!/^[RS]$/.test(c) || !/^[0-9a-f]{16}$/.test(k)) {
-        res(null, { status: 400 })
+        res(null, { status: 400, reason: 'c=' + c + ' klen=' + k.length })
         return
       }
       this.fetch({ method: 'GET', url: LOCAL_URL + '?c=' + c + '&k=' + k })
-        .then((r) => res(null, { status: r && r.status ? r.status : 0 }))
-        .catch((e) => res(null, { status: 0, error: String(e) }))
+        .then((r) => {
+          const body = r && r.body !== undefined ? (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) : ''
+          res(null, { status: r && r.status ? r.status : 0, reason: body.slice(0, 20) })
+        })
+        .catch((e) => res(null, { status: 0, reason: String(e).slice(0, 40) }))
     },
   }),
 )

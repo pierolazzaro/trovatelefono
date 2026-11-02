@@ -120,15 +120,7 @@ function onScan(r) {
   if (!sampleUuid && r.service_uuid_array && r.service_uuid_array.length) {
     sampleUuid = String(r.service_uuid_array[0]).slice(0, 12)
   }
-  const f = SCAN_MODES[modeIdx].filter
-  let ok = matchesPhone(r)
-  if (!ok && f) {
-    // con filtro hardware attivo accetto il risultato, salvo che dichiari
-    // esplicitamente altri service UUID (filtro ignorato dal firmware)
-    const arr = r.service_uuid_array
-    ok = !(arr && arr.length)
-  }
-  if (!ok) return
+  if (!matchesPhone(r)) return
   modeLocked = true
   const now = Date.now()
   phoneMac = ab2mac(r.dev_addr)
@@ -221,7 +213,6 @@ function sendCmd(cmd) {
   } catch (e) {
     busy = false
     status('Err: ' + String(e && e.message ? e.message : e).slice(0, 28))
-    sendCmdBle(cmd)
     return
   }
   withTimeout(req, 9000)
@@ -234,15 +225,14 @@ function sendCmd(cmd) {
         status('Premi "Accoppia" sul tel.')
         if (cmd === 'R') ringSent = false
       } else {
-        // app Android non raggiungibile dalla Zepp app: provo via BLE diretto
-        status('App tel. non risponde (' + st + ')')
-        sendCmdBle(cmd)
+        status('Tel ' + st + (r && r.reason ? ' ' + String(r.reason).slice(0, 22) : ''))
+        if (cmd === 'R') ringSent = false
       }
     })
     .catch((e) => {
       busy = false
       status('Zepp: ' + String(e && e.message ? e.message : e).slice(0, 24))
-      sendCmdBle(cmd)
+      if (cmd === 'R') ringSent = false
     })
 }
 
