@@ -5,8 +5,8 @@
     "appName": "Trova Telefono",
     "appType": "app",
     "version": {
-      "code": 10,
-      "name": "1.2.0"
+      "code": 11,
+      "name": "1.2.1"
     },
     "icon": "icon.png",
     "vender": "pietro",
