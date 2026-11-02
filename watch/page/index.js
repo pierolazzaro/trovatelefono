@@ -215,7 +215,16 @@ function sendCmd(cmd) {
   }
   busy = true
   status(cmd === 'R' ? 'Invio via Zepp…' : 'Arresto…')
-  withTimeout(pageRef.request({ method: 'tt.cmd', params: { c: cmd, k: getPairKey() } }), 9000)
+  let req
+  try {
+    req = pageRef.request({ method: 'tt.cmd', params: { c: cmd, k: getPairKey() } })
+  } catch (e) {
+    busy = false
+    status('Err: ' + String(e && e.message ? e.message : e).slice(0, 28))
+    sendCmdBle(cmd)
+    return
+  }
+  withTimeout(req, 9000)
     .then((r) => {
       busy = false
       const st = r && r.status
@@ -230,10 +239,34 @@ function sendCmd(cmd) {
         sendCmdBle(cmd)
       }
     })
-    .catch(() => {
+    .catch((e) => {
       busy = false
-      status('Zepp app non risponde')
+      status('Zepp: ' + String(e && e.message ? e.message : e).slice(0, 24))
       sendCmdBle(cmd)
+    })
+}
+
+// Test all'apertura: orologio -> Zepp app -> app Android
+function checkLink() {
+  if (!pageRef || typeof pageRef.request !== 'function') {
+    setText(ui.hint, 'zml non disponibile')
+    return
+  }
+  setText(ui.hint, 'Test Zepp app…')
+  let req
+  try {
+    req = pageRef.request({ method: 'tt.ping', params: {} })
+  } catch (e) {
+    setText(ui.hint, 'Zepp ERR ' + String(e && e.message ? e.message : e).slice(0, 26))
+    return
+  }
+  withTimeout(req, 8000)
+    .then((r) => {
+      const st = r && r.status
+      if (dirMode === 'off') setText(ui.hint, 'Zepp OK · tel ' + (st === 200 ? 'OK' : 'KO ' + st + (r && r.error ? ' ' + String(r.error).slice(0, 14) : '')))
+    })
+    .catch((e) => {
+      if (dirMode === 'off') setText(ui.hint, 'Zepp KO: ' + String(e && e.message ? e.message : e).slice(0, 24))
     })
 }
 
@@ -460,6 +493,7 @@ Page(BasePage({
 
     startScan()
     refreshTimer = setInterval(refresh, 300)
+    setTimeout(checkLink, 500)
     if (autoRing && !ringSent) {
       ringSent = true
       setTimeout(() => sendCmd('R'), 300)

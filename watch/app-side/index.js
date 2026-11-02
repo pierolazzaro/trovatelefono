@@ -11,6 +11,12 @@ AppSideService(
     onDestroy() {},
 
     onRequest(req, res) {
+      if (req && req.method === 'tt.ping') {
+        this.fetch({ method: 'GET', url: 'http://127.0.0.1:47811/ping' })
+          .then((r) => res(null, { status: r && r.status ? r.status : 0 }))
+          .catch((e) => res(null, { status: 0, error: String(e) }))
+        return
+      }
       if (!req || req.method !== 'tt.cmd') {
         res({ status: 'error', message: 'metodo sconosciuto' })
         return
